@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Profil - Réseau Social</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="../../assets/css/style.css">
+</head>
+<body>
+<div class="navbar">
+  <div class="brand">Réseau Social</div>
+  <nav>
+    <a href="accueil.html">Accueil</a>
+    <a href="amis.html">Amis</a>
+    <a href="chat.html">Messages</a>
+    <a href="profil.html">Mon profil</a>
+    <button onclick="logout()">Déconnexion</button>
+  </nav>
+</div>
+
+<div class="container">
+  <div class="card profile-header">
+    <img id="avatar" src="">
+    <h2 id="fullname"></h2>
+    <p id="bio" style="color:var(--muted);"></p>
+  </div>
+  <div id="posts"></div>
+</div>
+
+<script src="../../assets/js/api.js"></script>
+<script>
+requireLogin();
+(async () => {
+  const id = new URLSearchParams(window.location.search).get('id');
+  const res = await apiCall('get_user_profile.php?id=' + id);
+  if (!res.success) { document.body.innerHTML = '<p style="padding:40px;text-align:center;">Utilisateur introuvable.</p>'; return; }
+  document.getElementById('avatar').src = '../../' + res.profile.avatar;
+  document.getElementById('fullname').textContent = res.profile.prenom + ' ' + res.profile.nom;
+  document.getElementById('bio').textContent = res.profile.bio || '';
+  const postsEl = document.getElementById('posts');
+  postsEl.innerHTML = res.posts.length ? res.posts.map(p => `
+    <div class="card post">
+      <div class="post-content">${escapeHtml(p.content)}</div>
+      ${p.image ? `<img class="post-image" src="../../${p.image}">` : ''}
+    </div>`).join('') : '<p class="loading">Aucune publication.</p>';
+})();
+</script>
+</body>
+</html>

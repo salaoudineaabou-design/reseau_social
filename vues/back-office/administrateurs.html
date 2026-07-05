@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Modérateurs & Admins - Back-Office</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="../../assets/css/style.css">
+</head>
+<body>
+<div class="admin-layout">
+  <div class="admin-sidebar" id="adminSidebar"></div>
+  <div class="admin-content">
+    <h2>Gestion des modérateurs & administrateurs</h2>
+    <p style="color:var(--muted);">Promouvoir un utilisateur en modérateur ou administrateur, ou rétrograder un membre du staff.</p>
+    <div class="card">
+      <table class="admin-table">
+        <thead><tr><th>Avatar</th><th>Nom</th><th>Email</th><th>Rôle actuel</th><th>Actions</th></tr></thead>
+        <tbody id="staffBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script src="../../assets/js/api.js"></script>
+<script src="../../assets/js/admin.js"></script>
+<script>
+const me = requireStaffLogin();
+if (me.role !== 'admin') { window.location.href = 'dashboard.html'; }
+renderAdminSidebar('administrateurs.html');
+
+async function loadStaff() {
+  const res = await apiCall('admin_get_users.php');
+  const tbody = document.getElementById('staffBody');
+  if (!res.success) return;
+  tbody.innerHTML = res.users.map(u => {
+    let actions = '';
+    if (u.role === 'user') {
+      actions = `<button class="btn small" data-action="promote_moderateur" data-id="${u.id}">Nommer modérateur</button>`;
+    } else if (u.role === 'moderateur') {
+      actions = `
+        <button class="btn small" data-action="promote_admin" data-id="${u.id}">Promouvoir admin</button>
+        <button class="btn small secondary" data-action="demote" data-id="${u.id}">Rétrograder en utilisateur</button>`;
+    } else if (u.role === 'admin') {
+      actions = `<button class="btn small secondary" data-action="demote" data-id="${u.id}">Rétrograder en utilisateur</button>`;
+    }
+    return `<tr>
+      <td><img src="../../${u.avatar}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;"></td>
+      <td>${escapeHtml(u.prenom)} ${escapeHtml(u.nom)}</td>
+      <td>${escapeHtml(u.email)}</td>
+      <td><span class="badge ${u.role}">${u.role}</span></td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('button').forEach(btn => btn.onclick = async () => {
+    await apiCall('admin_manage_staff.php', 'POST', { id: Number(btn.dataset.id), action: btn.dataset.action });
+    loadStaff();
+  });
+}
+loadStaff();
+</script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Mon profil - Réseau Social</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="../../assets/css/style.css">
+</head>
+<body>
+<div class="navbar">
+  <div class="brand">Réseau Social</div>
+  <nav>
+    <a href="accueil.html">Accueil</a>
+    <a href="amis.html">Amis</a>
+    <a href="chat.html">Messages</a>
+    <a href="profil.html">Mon profil</a>
+    <button onclick="logout()">Déconnexion</button>
+  </nav>
+</div>
+
+<div class="container">
+  <div class="card profile-header">
+    <img id="avatarPreview" src="">
+  </div>
+
+  <div class="card">
+    <h3>Informations personnelles</h3>
+    <form id="profileForm">
+      <div class="form-group">
+        <label>Photo de profil</label>
+        <input type="file" id="avatarInput" accept="image/*">
+      </div>
+      <div class="form-group">
+        <label>Prénom</label>
+        <input type="text" id="prenom" required>
+      </div>
+      <div class="form-group">
+        <label>Nom</label>
+        <input type="text" id="nom" required>
+      </div>
+      <div class="form-group">
+        <label>Bio</label>
+        <textarea id="bio" rows="3"></textarea>
+      </div>
+      <p id="profileMsg" class="hidden"></p>
+      <button type="submit" class="btn small">Enregistrer</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Modifier le mot de passe</h3>
+    <form id="passwordForm">
+      <div class="form-group">
+        <label>Mot de passe actuel</label>
+        <input type="password" id="currentPassword" required>
+      </div>
+      <div class="form-group">
+        <label>Nouveau mot de passe</label>
+        <input type="password" id="newPassword" minlength="6" required>
+      </div>
+      <p id="passwordMsg" class="hidden"></p>
+      <button type="submit" class="btn small">Changer le mot de passe</button>
+    </form>
+  </div>
+</div>
+
+<script src="../../assets/js/api.js"></script>
+<script src="../../assets/js/profile.js"></script>
+</body>
+</html>

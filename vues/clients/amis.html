@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Amis - Réseau Social</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="../../assets/css/style.css">
+</head>
+<body>
+<div class="navbar">
+  <div class="brand">Réseau Social</div>
+  <nav>
+    <a href="accueil.html">Accueil</a>
+    <a href="amis.html">Amis</a>
+    <a href="chat.html">Messages</a>
+    <a href="profil.html">Mon profil</a>
+    <button onclick="logout()">Déconnexion</button>
+  </nav>
+</div>
+
+<div class="container" style="max-width:900px;">
+  <div class="card">
+    <h3>Invitations reçues</h3>
+    <div id="pendingRequests"></div>
+  </div>
+
+  <div class="card">
+    <h3>Découvrir des utilisateurs</h3>
+    <input type="text" id="searchInput" placeholder="Rechercher un utilisateur..." style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);margin-bottom:16px;">
+    <div id="userGrid" class="user-grid"></div>
+  </div>
+</div>
+
+<script src="../../assets/js/api.js"></script>
+<script src="../../assets/js/friends.js"></script>
+</body>
+</html>

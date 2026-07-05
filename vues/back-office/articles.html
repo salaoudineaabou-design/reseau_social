@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Articles - Back-Office</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="../../assets/css/style.css">
+</head>
+<body>
+<div class="admin-layout">
+  <div class="admin-sidebar" id="adminSidebar"></div>
+  <div class="admin-content">
+    <h2>Gestion des articles</h2>
+    <div class="card">
+      <table class="admin-table">
+        <thead><tr><th>Auteur</th><th>Contenu</th><th>Commentaires</th><th>Publié le</th><th>Actions</th></tr></thead>
+        <tbody id="postsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script src="../../assets/js/api.js"></script>
+<script src="../../assets/js/admin.js"></script>
+<script>
+requireStaffLogin();
+renderAdminSidebar('articles.html');
+
+async function loadPosts() {
+  const res = await apiCall('admin_get_posts.php');
+  const tbody = document.getElementById('postsBody');
+  if (!res.success) return;
+  tbody.innerHTML = res.posts.map(p => `<tr>
+      <td>${escapeHtml(p.prenom)} ${escapeHtml(p.nom)}</td>
+      <td>${escapeHtml(p.content).slice(0, 80)}${p.content.length > 80 ? '…' : ''}</td>
+      <td>${p.comments_count}</td>
+      <td>${p.created_at}</td>
+      <td><button class="btn small danger" data-id="${p.id}">Supprimer</button></td>
+    </tr>`).join('') || '<tr><td colspan="5">Aucun article.</td></tr>';
+
+  tbody.querySelectorAll('button').forEach(btn => btn.onclick = async () => {
+    if (!confirm('Supprimer cet article ?')) return;
+    await apiCall('admin_delete_post.php', 'POST', { id: Number(btn.dataset.id) });
+    loadPosts();
+  });
+}
+loadPosts();
+</script>
+</body>
+</html>
