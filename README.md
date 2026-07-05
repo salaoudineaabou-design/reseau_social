@@ -70,4 +70,4 @@ Gildas développe les publications et commentaires.
 Salaou-Dine développe les amis et le chat.
 Houéfa finalise le back-office et l'intégration.
 7. Lien du dépôt
-[INSÉRER LE LIEN GITHUB/GITLAB ICI]
+https://github.com/salaoudineaabou-design/reseau_social
