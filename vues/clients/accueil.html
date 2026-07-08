@@ -1,42 +1,11 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<title>Accueil - Réseau Social</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="stylesheet" href="../../assets/css/style.css">
-</head>
-<body>
-<div class="navbar">
-  <div class="brand">Réseau Social</div>
-  <nav>
-    <a href="accueil.html">Accueil</a>
-    <a href="amis.html">Amis</a>
-    <a href="chat.html">Messages</a>
-    <a href="profil.html">Mon profil</a>
-    <img class="avatar-mini" id="navUserAvatar" src="">
-    <span id="navUserName"></span>
-    <button onclick="logout()">Déconnexion</button>
-  </nav>
-</div>
-
-<div class="container">
-  <div class="card post-form">
-    <form id="postForm">
-      <div class="post-input">
-        <textarea id="postContent" rows="2" placeholder="Exprimez-vous..." required></textarea>
-      </div>
-      <div class="actions">
-        <input type="file" id="postImage" accept="image/*">
-        <button type="submit" class="btn small">Publier</button>
-      </div>
-    </form>
+<div class="zone-publication">
+  <textarea id="nouvel-article" placeholder="Quoi de neuf ?" maxlength="2000"></textarea>
+  <div class="zone-publication-actions">
+    <input type="file" id="image-article" accept="image/jpeg,image/png,image/gif,image/webp">
+    <button class="btn-publier" id="btn-publier">Publier</button>
   </div>
-
-  <div id="feed"></div>
 </div>
 
-<script src="../../assets/js/api.js"></script>
-<script src="../../assets/js/feed.js"></script>
-</body>
-</html>
+<div id="liste-articles">
+  <p class="chargement">Chargement des articles...</p>
+</div>

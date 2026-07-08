@@ -1,29 +1,51 @@
 <?php
-require_once __DIR__ . '/functions.php';
+/**
+ * api/reset_password.php — POST
+ * Change le mot de passe à l'aide d'un token valide et non expiré.
+ * Reçoit : { token, nouveau_mdp }
+ */
+
+header('Content-Type: application/json; charset=utf-8');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST');
+header('Access-Control-Allow-Headers: Content-Type');
+
+require_once __DIR__ . '/config.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    jsonResponse(['success' => false, 'message' => 'Méthode non autorisée.'], 405);
+    http_response_code(405);
+    echo json_encode(['success' => false, 'message' => 'Méthode non autorisée']);
+    exit;
 }
 
-$input = getJsonInput();
-$token = $input['token'] ?? '';
-$password = $input['password'] ?? '';
+$body        = lire_json_body();
+$token       = $body['token'] ?? '';
+$nouveau_mdp = (string)($body['nouveau_mdp'] ?? '');
 
-if (!$token || strlen($password) < 6) {
-    jsonResponse(['success' => false, 'message' => 'Requête invalide.'], 400);
+if (strlen($nouveau_mdp) < 8) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Mot de passe trop court (8 caractères minimum)']);
+    exit;
 }
 
-$pdo = getDB();
-$stmt = $pdo->prepare('SELECT * FROM users WHERE reset_token = ? AND reset_token_expiry > NOW()');
+$stmt = $pdo->prepare(
+    'SELECT id, user_id FROM password_resets
+     WHERE token = ? AND expire_at > NOW() AND utilise = 0'
+);
 $stmt->execute([$token]);
-$user = $stmt->fetch();
+$reset = $stmt->fetch();
 
-if (!$user) {
-    jsonResponse(['success' => false, 'message' => 'Lien invalide ou expiré.'], 400);
+if (!$reset) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Lien invalide ou expiré']);
+    exit;
 }
 
-$hash = password_hash($password, PASSWORD_BCRYPT);
-$stmt = $pdo->prepare('UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?');
-$stmt->execute([$hash, $user['id']]);
+$hash = password_hash($nouveau_mdp, PASSWORD_DEFAULT);
+$pdo->prepare('UPDATE users SET mot_de_passe = ? WHERE id = ?')
+    ->execute([$hash, $reset['user_id']]);
 
-jsonResponse(['success' => true, 'message' => 'Mot de passe réinitialisé avec succès.']);
+$pdo->prepare('UPDATE password_resets SET utilise = 1 WHERE id = ?')
+    ->execute([$reset['id']]);
+
+echo json_encode(['success' => true, 'message' => 'Mot de passe modifié avec succès']);

@@ -1,0 +1,21 @@
+<div class="auth-container">
+  <div class="auth-card">
+    <h2>Mot de passe oublié</h2>
+    <p style="color:var(--couleur-gris);font-size:0.88rem;margin-bottom:1rem;">
+      Indique ton adresse email, tu recevras un lien pour choisir un nouveau mot de passe.
+    </p>
+    <div id="forgot-error"></div>
+    <div id="forgot-success"></div>
+
+    <div class="form-group">
+      <label for="forgot-email">Email</label>
+      <input type="email" id="forgot-email" placeholder="ton@email.com">
+    </div>
+
+    <button class="btn-primary" id="btn-forgot">Envoyer le lien</button>
+
+    <div class="auth-switch">
+      <a href="#" data-vue="login">Retour à la connexion</a>
+    </div>
+  </div>
+</div>

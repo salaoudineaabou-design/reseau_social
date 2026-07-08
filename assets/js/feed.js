@@ -1,140 +1,274 @@
 /**
- * feed.js - Page d'accueil : publication, likes/dislikes, commentaires
- * Aucun rechargement de page (fetch + injection DOM).
+ * assets/js/feed.js
+ * Gère le flux d'actualité : chargement des articles, publication,
+ * likes/dislikes et commentaires (chargement + ajout en AJAX, sans
+ * jamais recharger la page).
  */
 
-requireLogin();
-const me = Session.getUser();
+/** Charge et affiche les articles du flux principal. */
+async function chargerArticles() {
+  const conteneur = document.getElementById('liste-articles');
+  if (!conteneur) return;
+  conteneur.innerHTML = '<p class="chargement">Chargement des articles...</p>';
 
-function renderNavbar() {
-  document.getElementById('navUserAvatar').src = '../../' + me.avatar;
-  document.getElementById('navUserName').textContent = me.prenom;
-}
+  const user = utilisateurConnecte();
+  const userIdParam = user ? '?user_id=' + user.id : '';
 
-function postTemplate(p) {
-  const likeActive = p.my_reaction === 'like' ? 'active like' : '';
-  const dislikeActive = p.my_reaction === 'dislike' ? 'active dislike' : '';
-  return `
-  <div class="card post" data-post-id="${p.id}">
-    <div class="post-header">
-      <img src="../../${p.avatar}" alt="avatar">
-      <div>
-        <div class="name">${escapeHtml(p.prenom)} ${escapeHtml(p.nom)}</div>
-        <div class="time">${timeAgo(p.created_at)}</div>
-      </div>
-    </div>
-    <div class="post-content">${escapeHtml(p.content)}</div>
-    ${p.image ? `<img class="post-image" src="../../${p.image}">` : ''}
-    <div class="post-stats">
-      <span>👍 <span class="like-count">${p.likes}</span> &nbsp; 👎 <span class="dislike-count">${p.dislikes}</span></span>
-      <span class="comments-toggle-count">${p.comments_count} commentaire(s)</span>
-    </div>
-    <div class="post-actions">
-      <button class="btn-like ${likeActive}"><span>👍</span> J'aime</button>
-      <button class="btn-dislike ${dislikeActive}"><span>👎</span> Je n'aime pas</button>
-      <button class="btn-comment-toggle"><span>💬</span> Commenter</button>
-    </div>
-    <div class="comments-section">
-      <div class="comments-list"></div>
-      <div class="comment-input-row">
-        <input type="text" placeholder="Écrire un commentaire..." class="comment-input">
-        <button class="btn small btn-send-comment">Envoyer</button>
-      </div>
-    </div>
-  </div>`;
-}
+  try {
+    const reponse = await fetch(API_URL + 'articles.php' + userIdParam);
+    const data = await reponse.json();
 
-async function loadFeed() {
-  const feedEl = document.getElementById('feed');
-  feedEl.innerHTML = '<div class="loading">Chargement du fil d\'actualité...</div>';
-  const res = await apiCall('get_posts.php');
-  if (!res.success) { feedEl.innerHTML = '<div class="error-msg">Erreur de chargement.</div>'; return; }
-  feedEl.innerHTML = res.posts.length
-    ? res.posts.map(postTemplate).join('')
-    : '<div class="loading">Aucune publication pour le moment.</div>';
-  attachPostEvents();
-}
+    if (!data.success || data.data.length === 0) {
+      conteneur.innerHTML = '<p class="vide">Aucun article pour le moment. Sois le premier à publier !</p>';
+      return;
+    }
 
-function attachPostEvents() {
-  document.querySelectorAll('.post').forEach((postEl) => {
-    const postId = postEl.dataset.postId;
-
-    postEl.querySelector('.btn-like').onclick = () => react(postEl, postId, 'like');
-    postEl.querySelector('.btn-dislike').onclick = () => react(postEl, postId, 'dislike');
-
-    postEl.querySelector('.btn-comment-toggle').onclick = () => {
-      const section = postEl.querySelector('.comments-section');
-      section.classList.toggle('open');
-      if (section.classList.contains('open')) loadComments(postEl, postId);
-    };
-
-    postEl.querySelector('.btn-send-comment').onclick = () => sendComment(postEl, postId);
-    postEl.querySelector('.comment-input').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') sendComment(postEl, postId);
+    conteneur.innerHTML = '';
+    data.data.forEach(function (article) {
+      conteneur.appendChild(construireCarteArticle(article));
     });
-  });
-}
-
-async function react(postEl, postId, type) {
-  const res = await apiCall('like_post.php', 'POST', { post_id: Number(postId), type });
-  if (!res.success) return;
-  postEl.querySelector('.like-count').textContent = res.likes;
-  postEl.querySelector('.dislike-count').textContent = res.dislikes;
-  postEl.querySelector('.btn-like').classList.toggle('active', res.my_reaction === 'like');
-  postEl.querySelector('.btn-like').classList.toggle('like', res.my_reaction === 'like');
-  postEl.querySelector('.btn-dislike').classList.toggle('active', res.my_reaction === 'dislike');
-  postEl.querySelector('.btn-dislike').classList.toggle('dislike', res.my_reaction === 'dislike');
-}
-
-function commentTemplate(c) {
-  return `<div class="comment">
-    <img src="../../${c.avatar}">
-    <div class="bubble"><b>${escapeHtml(c.prenom)} ${escapeHtml(c.nom)}</b>${escapeHtml(c.content)}</div>
-  </div>`;
-}
-
-async function loadComments(postEl, postId) {
-  const list = postEl.querySelector('.comments-list');
-  list.innerHTML = '<div class="loading">Chargement...</div>';
-  const res = await apiCall('get_comments.php?post_id=' + postId);
-  list.innerHTML = res.success && res.comments.length
-    ? res.comments.map(commentTemplate).join('')
-    : '<div class="loading">Aucun commentaire.</div>';
-}
-
-async function sendComment(postEl, postId) {
-  const input = postEl.querySelector('.comment-input');
-  const content = input.value.trim();
-  if (!content) return;
-  const res = await apiCall('comment_post.php', 'POST', { post_id: Number(postId), content });
-  if (res.success) {
-    input.value = '';
-    postEl.querySelector('.comments-list').insertAdjacentHTML('beforeend', commentTemplate({
-      ...res.comment, avatar: me.avatar,
-    }));
-    const countEl = postEl.querySelector('.comments-toggle-count');
-    countEl.textContent = (parseInt(countEl.textContent) + 1) + ' commentaire(s)';
+  } catch (erreur) {
+    conteneur.innerHTML = '<p class="erreur">Impossible de charger les articles.</p>';
   }
 }
 
-// ---------- Publication d'un nouvel article ----------
-const postForm = document.getElementById('postForm');
-if (postForm) {
-  postForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const content = document.getElementById('postContent').value.trim();
-    const imageInput = document.getElementById('postImage');
-    if (!content) return;
-    const fd = new FormData();
-    fd.append('content', content);
-    if (imageInput.files[0]) fd.append('image', imageInput.files[0]);
-    const res = await apiUpload('create_post.php', fd);
-    if (res.success) {
-      postForm.reset();
-      loadFeed();
+/** Construit le DOM d'une carte article à partir des données JSON. */
+function construireCarteArticle(article) {
+  const carte = document.createElement('div');
+  carte.className = 'carte-article';
+  carte.dataset.articleId = article.id;
+
+  const imageHtml = article.image
+    ? `<img src="${texteSur(article.image)}" class="article-image" alt="Image de l'article">`
+    : '';
+
+  const votLike = article.mon_vote === 'like' ? 'actif' : '';
+  const votDislike = article.mon_vote === 'dislike' ? 'actif' : '';
+
+  carte.innerHTML = `
+    <div class="article-header">
+      <img src="${texteSur(article.auteur_avatar)}" class="avatar" alt="">
+      <div>
+        <a href="#" class="auteur-nom" data-vue="profil" data-user-id="${article.auteur_id}" style="text-decoration:none;color:inherit;">
+          ${texteSur(article.auteur_prenom)} ${texteSur(article.auteur_nom)}
+        </a>
+        <div class="article-date">${formaterDate(article.created_at)}</div>
+      </div>
+    </div>
+    <div class="article-contenu"></div>
+    ${imageHtml}
+    <div class="article-actions">
+      <button class="btn-like ${votLike}" data-type="like" data-id="${article.id}">
+        👍 <span class="nb-like">${article.nb_likes}</span>
+      </button>
+      <button class="btn-like ${votDislike}" data-type="dislike" data-id="${article.id}">
+        👎 <span class="nb-dislike">${article.nb_dislikes}</span>
+      </button>
+      <button class="btn-commentaires" data-id="${article.id}">
+        💬 <span class="nb-comm">${article.nb_commentaires}</span> commentaire(s)
+      </button>
+    </div>
+    <div class="zone-commentaires" id="commentaires-${article.id}" style="display:none;"></div>
+  `;
+  // Le contenu de l'article est inséré via textContent pour bloquer toute injection HTML
+  carte.querySelector('.article-contenu').textContent = article.contenu;
+
+  return carte;
+}
+
+/** Gère le clic sur un bouton like/dislike (délégation d'événement). */
+async function gererClicLike(bouton) {
+  const user = utilisateurConnecte();
+  if (!user) { naviguer('login'); return; }
+
+  const articleId = bouton.dataset.id;
+  const type = bouton.dataset.type;
+
+  try {
+    const reponse = await fetch(API_URL + 'like.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: user.id, article_id: articleId, type: type }),
+    });
+    const data = await reponse.json();
+    if (!data.success) return;
+
+    const carte = bouton.closest('.carte-article');
+    carte.querySelector('.nb-like').textContent = data.nb_likes;
+    carte.querySelector('.nb-dislike').textContent = data.nb_dislikes;
+
+    carte.querySelectorAll('.btn-like').forEach(b => b.classList.remove('actif'));
+    if (data.mon_vote) {
+      carte.querySelector(`.btn-like[data-type="${data.mon_vote}"]`).classList.add('actif');
+    }
+  } catch (erreur) {
+    afficherBandeauGlobal('Erreur réseau lors du vote.', 'error');
+  }
+}
+
+/** Affiche/masque et charge les commentaires d'un article au premier clic. */
+async function gererClicCommentaires(bouton) {
+  const articleId = bouton.dataset.id;
+  const zone = document.getElementById('commentaires-' + articleId);
+
+  const estVisible = zone.style.display !== 'none';
+  if (estVisible) { zone.style.display = 'none'; return; }
+
+  zone.style.display = 'block';
+  if (zone.dataset.charge === 'true') return;
+
+  zone.innerHTML = '<p class="chargement">Chargement...</p>';
+
+  try {
+    const reponse = await fetch(API_URL + 'commentaires.php?article_id=' + articleId);
+    const data = await reponse.json();
+
+    zone.innerHTML = '';
+    data.data.forEach(function (c) {
+      zone.appendChild(construireCommentaire(c));
+    });
+    zone.appendChild(construireFormulaireCommentaire(articleId));
+    zone.dataset.charge = 'true';
+  } catch (erreur) {
+    zone.innerHTML = '<p class="erreur">Impossible de charger les commentaires.</p>';
+  }
+}
+
+function construireCommentaire(c) {
+  const div = document.createElement('div');
+  div.className = 'commentaire';
+  div.innerHTML = `
+    <img src="${texteSur(c.auteur_avatar)}" class="avatar-xs" alt="">
+    <div>
+      <strong></strong>
+      <span></span>
+    </div>
+  `;
+  div.querySelector('strong').textContent = c.auteur_prenom + ' ' + c.auteur_nom;
+  div.querySelector('span').textContent = c.contenu;
+  return div;
+}
+
+function construireFormulaireCommentaire(articleId) {
+  const div = document.createElement('div');
+  div.className = 'saisie-commentaire';
+  div.innerHTML = `
+    <input type="text" class="input-commentaire" placeholder="Écrire un commentaire..." maxlength="500">
+    <button class="btn-envoyer-commentaire" data-id="${articleId}">Envoyer</button>
+  `;
+  return div;
+}
+
+async function gererEnvoiCommentaire(bouton) {
+  const user = utilisateurConnecte();
+  if (!user) { naviguer('login'); return; }
+
+  const articleId = bouton.dataset.id;
+  const input = bouton.previousElementSibling;
+  const contenu = input.value.trim();
+  if (!contenu) return;
+
+  bouton.disabled = true;
+
+  try {
+    const reponse = await fetch(API_URL + 'commentaires.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: user.id, article_id: articleId, contenu: contenu }),
+    });
+    const data = await reponse.json();
+
+    if (data.success) {
+      const zone = document.getElementById('commentaires-' + articleId);
+      const nouveauCommentaire = construireCommentaire(data.commentaire);
+      nouveauCommentaire.classList.add('nouveau');
+      zone.insertBefore(nouveauCommentaire, zone.querySelector('.saisie-commentaire'));
+      input.value = '';
+
+      const carte = document.querySelector(`.carte-article[data-article-id="${articleId}"]`);
+      const compteur = carte.querySelector('.nb-comm');
+      compteur.textContent = parseInt(compteur.textContent, 10) + 1;
+    } else {
+      afficherBandeauGlobal(data.message || 'Erreur lors de l\'envoi du commentaire', 'error');
+    }
+  } catch (erreur) {
+    afficherBandeauGlobal('Erreur réseau.', 'error');
+  } finally {
+    bouton.disabled = false;
+  }
+}
+
+/** Publie un nouvel article (avec image optionnelle) via FormData. */
+async function gererPublicationArticle() {
+  const user = utilisateurConnecte();
+  if (!user) { naviguer('login'); return; }
+
+  const texte = document.getElementById('nouvel-article').value.trim();
+  const fichierInput = document.getElementById('image-article');
+  const btn = document.getElementById('btn-publier');
+
+  if (!texte) {
+    afficherBandeauGlobal('Le contenu ne peut pas être vide.', 'error');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('user_id', user.id);
+  formData.append('contenu', texte);
+  if (fichierInput.files[0]) {
+    formData.append('image', fichierInput.files[0]);
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Publication...';
+
+  try {
+    const reponse = await fetch(API_URL + 'articles.php', { method: 'POST', body: formData });
+    const data = await reponse.json();
+
+    if (data.success) {
+      document.getElementById('nouvel-article').value = '';
+      fichierInput.value = '';
+      const conteneur = document.getElementById('liste-articles');
+      const carte = construireCarteArticle(data.article);
+      conteneur.insertBefore(carte, conteneur.firstChild);
+      if (conteneur.querySelector('.vide')) conteneur.querySelector('.vide').remove();
+    } else {
+      afficherBandeauGlobal(data.message || 'Erreur lors de la publication', 'error');
+    }
+  } catch (erreur) {
+    afficherBandeauGlobal('Erreur réseau lors de la publication.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Publier';
+  }
+}
+
+/** Attache les écouteurs délégués une seule fois pour la vue accueil. */
+function initialiserAccueil() {
+  chargerArticles();
+
+  document.getElementById('btn-publier').addEventListener('click', gererPublicationArticle);
+
+  document.getElementById('liste-articles').addEventListener('click', function (e) {
+    const btnLike = e.target.closest('.btn-like');
+    const btnComm = e.target.closest('.btn-commentaires');
+    const btnEnvoi = e.target.closest('.btn-envoyer-commentaire');
+    const lienAuteur = e.target.closest('[data-vue="profil"]');
+
+    if (btnLike) gererClicLike(btnLike);
+    else if (btnComm) gererClicCommentaires(btnComm);
+    else if (btnEnvoi) gererEnvoiCommentaire(btnEnvoi);
+    else if (lienAuteur) {
+      e.preventDefault();
+      naviguer('profil', { userId: lienAuteur.dataset.userId });
+    }
+  });
+
+  // Permet d'envoyer un commentaire avec la touche Entrée
+  document.getElementById('liste-articles').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter' && e.target.classList.contains('input-commentaire')) {
+      e.target.nextElementSibling.click();
     }
   });
 }
-
-renderNavbar();
-loadFeed();

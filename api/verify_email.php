@@ -1,19 +1,30 @@
-<?php
-require_once __DIR__ . '/functions.php';
+<!-- <?php
+/**
+ * api/verify_email.php — GET
+ * Appelé directement par le navigateur via le lien reçu par email
+ * (pas par Fetch). Valide le token, active le compte, puis redirige.
+ */
+
+require_once __DIR__ . '/config.php';
 
 $token = $_GET['token'] ?? '';
-if (!$token) jsonResponse(['success' => false, 'message' => 'Token manquant.'], 400);
 
-$pdo = getDB();
-$stmt = $pdo->prepare('SELECT id FROM users WHERE verify_token = ?');
+if (empty($token)) {
+    header('Location: ' . rtrim(APP_BASE_URL, '/') . '/index.html?erreur=token_manquant');
+    exit;
+}
+
+$stmt = $pdo->prepare('SELECT id FROM users WHERE token_email = ? AND email_verifie = 0');
 $stmt->execute([$token]);
 $user = $stmt->fetch();
 
 if (!$user) {
-    jsonResponse(['success' => false, 'message' => 'Token invalide ou déjà utilisé.'], 404);
+    header('Location: ' . rtrim(APP_BASE_URL, '/') . '/index.html?erreur=token_invalide');
+    exit;
 }
 
-$stmt = $pdo->prepare('UPDATE users SET is_verified = 1, verify_token = NULL WHERE id = ?');
+$stmt = $pdo->prepare('UPDATE users SET email_verifie = 1, token_email = NULL WHERE id = ?');
 $stmt->execute([$user['id']]);
 
-jsonResponse(['success' => true, 'message' => 'Email confirmé avec succès. Vous pouvez maintenant vous connecter.']);
+header('Location: ' . rtrim(APP_BASE_URL, '/') . '/index.html?succes=compte_active');
+exit; -->

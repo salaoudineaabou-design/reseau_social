@@ -1,15 +1,33 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<title>Réseau Social</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MonReseau Social</title>
+  <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
-<script>
-  const token = sessionStorage.getItem('session_token');
-  window.location.href = token ? 'vues/clients/accueil.html' : 'vues/clients/login.html';
-</script>
-<noscript>JavaScript doit être activé pour utiliser cette application.</noscript>
+
+  <!-- ZONE PERMANENTE : la navbar n'est jamais remplacée par le routeur -->
+  <nav id="navbar">
+    <span class="logo" data-vue="accueil" style="cursor:pointer">🌐 MonReseau</span>
+    <div id="nav-links"></div>
+  </nav>
+
+  <!-- Bannière de message global (succès/erreur passés en paramètre d'URL) -->
+  <div id="bandeau-global"></div>
+
+  <!-- ZONE DYNAMIQUE : vidée et remplie par JavaScript à chaque navigation -->
+  <main id="app"></main>
+
+  <!-- Les scripts sont chargés en fin de body pour garantir que le DOM existe -->
+  <script src="assets/js/ui.js"></script>
+  <script src="assets/js/auth.js"></script>
+  <script src="assets/js/feed.js"></script>
+  <script src="assets/js/profil.js"></script>
+  <script src="assets/js/amis.js"></script>
+  <script src="assets/js/chat.js"></script>
+  <script src="assets/js/admin.js"></script>
+  <script src="assets/js/app.js"></script>
 </body>
 </html>

@@ -1,48 +1,27 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<title>Messages - Réseau Social</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="stylesheet" href="../../assets/css/style.css">
-</head>
-<body>
-<div class="navbar">
-  <div class="brand">Réseau Social</div>
-  <nav>
-    <a href="accueil.html">Accueil</a>
-    <a href="amis.html">Amis</a>
-    <a href="chat.html">Messages</a>
-    <a href="profil.html">Mon profil</a>
-    <button onclick="logout()">Déconnexion</button>
-  </nav>
-</div>
+<h2 style="margin-bottom:1rem;">Messages</h2>
 
-<div class="chat-wrapper">
+<div class="chat-conteneur">
   <div class="chat-sidebar">
-    <div class="chat-search">
-      <input type="text" id="chatSearch" placeholder="Rechercher un ami...">
+    <div class="chat-sidebar-header">
+      <input type="text" id="recherche-conv" placeholder="Rechercher...">
     </div>
-    <div id="conversationList"></div>
+    <div id="liste-conversations">
+      <p class="chargement" style="padding:1rem;">Chargement...</p>
+    </div>
   </div>
 
-  <div class="chat-main">
-    <div class="chat-header hidden" id="chatHeader">
-      <img id="chatHeaderAvatar" src="">
-      <b id="chatHeaderName"></b>
+  <div class="chat-zone">
+    <div id="chat-vide" class="chat-vide">Sélectionne une conversation pour commencer à discuter.</div>
+
+    <div id="zone-chat-active" style="display:none;flex-direction:column;height:100%;">
+      <div class="chat-entete" id="chat-entete"></div>
+      <div id="zone-messages"></div>
+      <div class="chat-saisie">
+        <label for="input-image-message" class="btn-piece-jointe" title="Envoyer une image">📎</label>
+        <input type="file" id="input-image-message" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none;">
+        <input type="text" id="input-message" placeholder="Écris un message..." maxlength="1000">
+        <button id="btn-envoyer-message">Envoyer</button>
+      </div>
     </div>
-    <div class="chat-messages" id="chatMessages">
-      <div class="chat-empty" id="chatEmpty">Sélectionnez une conversation pour commencer à discuter.</div>
-    </div>
-    <form class="chat-input-row hidden" id="chatForm">
-      <input type="text" id="chatText" placeholder="Écrire un message...">
-      <input type="file" id="chatImage" accept="image/*" style="width:120px;">
-      <button type="submit" class="btn small">Envoyer</button>
-    </form>
   </div>
 </div>
-
-<script src="../../assets/js/api.js"></script>
-<script src="../../assets/js/chat.js"></script>
-</body>
-</html>

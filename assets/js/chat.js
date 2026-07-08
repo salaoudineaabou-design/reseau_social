@@ -1,119 +1,247 @@
 /**
- * chat.js - Messagerie instantanée simulée par intervalle JS (toutes les 3s),
- * conformément à l'énoncé (sockets Node.js en option, sinon polling JS).
+ * assets/js/chat.js
+ * Gère la messagerie : liste des conversations, affichage des messages,
+ * envoi, et rafraîchissement automatique par polling (setInterval)
+ * toutes les 3 secondes tant que la vue chat est active.
  */
 
-requireLogin();
-const me = Session.getUser();
+let _conversationActive = null;
+let _dernierTimestamp = '1970-01-01 00:00:00';
+let _intervalPolling = null;
 
-let activeUserId = null;
-let lastMessageId = 0;
-let pollInterval = null;
+async function chargerConversations(idAOuvrir) {
+  const conteneur = document.getElementById('liste-conversations');
+  const user = utilisateurConnecte();
 
-function convoTemplate(c) {
-  const time = c.last_message_time ? timeAgo(c.last_message_time) : '';
-  return `<div class="conversation-item" data-id="${c.id}" data-name="${escapeHtml(c.prenom)} ${escapeHtml(c.nom)}" data-avatar="${c.avatar}">
-    <img src="../../${c.avatar}">
-    <div class="meta">
-      <div class="name">${escapeHtml(c.prenom)} ${escapeHtml(c.nom)}</div>
-      <div class="last">${c.last_message ? escapeHtml(c.last_message) : '📷 Image'}</div>
-    </div>
-    ${c.unread_count > 0 ? `<span class="unread-badge">${c.unread_count}</span>` : ''}
-    <span class="time" style="font-size:11px;">${time}</span>
-  </div>`;
+  try {
+    const reponse = await fetch(API_URL + 'conversations.php?user_id=' + user.id);
+    const data = await reponse.json();
+
+    conteneur.innerHTML = '';
+    if (!data.data || data.data.length === 0) {
+      conteneur.innerHTML = '<p class="vide" style="padding:1rem;">Aucune conversation. Va sur le profil d\'un ami pour lui écrire.</p>';
+    } else {
+      data.data.forEach(function (conv) {
+        conteneur.appendChild(construireItemConversation(conv));
+      });
+    }
+
+    if (idAOuvrir) {
+      ouvrirConversationAvecUtilisateur(idAOuvrir);
+    }
+  } catch (erreur) {
+    conteneur.innerHTML = '<p class="erreur">Erreur de chargement.</p>';
+  }
 }
 
-async function loadConversations() {
-  const res = await apiCall('get_conversations.php');
-  const list = document.getElementById('conversationList');
-  if (!res.success || !res.conversations.length) {
-    list.innerHTML = '<p class="loading">Aucune conversation. Recherchez un ami pour commencer.</p>';
+function construireItemConversation(conv) {
+  const div = document.createElement('div');
+  div.className = 'conv-item';
+  div.dataset.convId = conv.conv_id;
+  div.dataset.autreId = conv.autre_id;
+  div.dataset.autreNom = conv.autre_prenom + ' ' + conv.autre_nom;
+  div.dataset.autreAvatar = conv.autre_avatar;
+
+  const badge = conv.non_lus > 0 ? `<span class="badge-notif">${conv.non_lus}</span>` : '';
+
+  div.innerHTML = `
+    <img src="${texteSur(conv.autre_avatar)}" class="avatar-sm" alt="">
+    <div>
+      <div class="conv-nom"></div>
+      <div class="conv-dernier"></div>
+    </div>
+    ${badge}
+  `;
+  div.querySelector('.conv-nom').textContent = conv.autre_prenom + ' ' + conv.autre_nom;
+  div.querySelector('.conv-dernier').textContent = conv.dernier_message || 'Nouvelle conversation';
+
+  return div;
+}
+
+/** Ouvre (ou crée si besoin) une conversation à partir de l'id d'un autre utilisateur. */
+async function ouvrirConversationAvecUtilisateur(autreId) {
+  const itemExistant = document.querySelector(`.conv-item[data-autre-id="${autreId}"]`);
+
+  if (itemExistant) {
+    ouvrirConversation(itemExistant.dataset.convId, itemExistant.dataset.autreNom, itemExistant.dataset.autreAvatar, autreId);
     return;
   }
-  list.innerHTML = res.conversations.map(convoTemplate).join('');
-  list.querySelectorAll('.conversation-item').forEach(item => {
-    item.onclick = () => openConversation(item.dataset.id, item.dataset.name, item.dataset.avatar);
-  });
-}
 
-async function searchFriends(query) {
-  const res = await apiCall('get_users.php?search=' + encodeURIComponent(query));
-  const list = document.getElementById('conversationList');
-  if (!query) { loadConversations(); return; }
-  list.innerHTML = res.users.map(u => `
-    <div class="conversation-item" data-id="${u.id}" data-name="${escapeHtml(u.prenom)} ${escapeHtml(u.nom)}" data-avatar="${u.avatar}">
-      <img src="../../${u.avatar}">
-      <div class="meta"><div class="name">${escapeHtml(u.prenom)} ${escapeHtml(u.nom)}</div></div>
-    </div>`).join('') || '<p class="loading">Aucun résultat.</p>';
-  list.querySelectorAll('.conversation-item').forEach(item => {
-    item.onclick = () => openConversation(item.dataset.id, item.dataset.name, item.dataset.avatar);
-  });
-}
-
-document.getElementById('chatSearch').addEventListener('input', (e) => searchFriends(e.target.value.trim()));
-
-function bubbleTemplate(m) {
-  const mine = Number(m.sender_id) === Number(me.id);
-  let content = '';
-  if (m.image) content += `<img src="../../${m.image}">`;
-  if (m.content) content += escapeHtml(m.content);
-  return `<div class="msg-bubble ${mine ? 'mine' : 'theirs'}">${content}</div>`;
-}
-
-function openConversation(userId, name, avatar) {
-  activeUserId = Number(userId);
-  lastMessageId = 0;
-  document.getElementById('chatHeader').classList.remove('hidden');
-  document.getElementById('chatHeaderName').textContent = name;
-  document.getElementById('chatHeaderAvatar').src = '../../' + avatar;
-  document.getElementById('chatForm').classList.remove('hidden');
-  document.getElementById('chatEmpty').classList.add('hidden');
-  document.getElementById('chatMessages').innerHTML = '';
-
-  document.querySelectorAll('.conversation-item').forEach(el => el.classList.toggle('active', el.dataset.id === String(userId)));
-
-  fetchMessages(true);
-  if (pollInterval) clearInterval(pollInterval);
-  pollInterval = setInterval(() => fetchMessages(false), 3000); // polling toutes les 3 secondes
-}
-
-async function fetchMessages(scroll) {
-  if (!activeUserId) return;
-  const res = await apiCall(`get_messages.php?user_id=${activeUserId}&since_id=${lastMessageId}`);
-  if (!res.success || !res.messages.length) return;
-  const container = document.getElementById('chatMessages');
-  res.messages.forEach(m => {
-    container.insertAdjacentHTML('beforeend', bubbleTemplate(m));
-    lastMessageId = Math.max(lastMessageId, m.id);
-  });
-  if (scroll) container.scrollTop = container.scrollHeight;
-  else container.scrollTop = container.scrollHeight;
-}
-
-document.getElementById('chatForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!activeUserId) return;
-  const input = document.getElementById('chatText');
-  const fileInput = document.getElementById('chatImage');
-  const content = input.value.trim();
-  if (!content && !fileInput.files[0]) return;
-
-  const fd = new FormData();
-  fd.append('receiver_id', activeUserId);
-  fd.append('content', content);
-  if (fileInput.files[0]) fd.append('image', fileInput.files[0]);
-
-  const res = await apiUpload('send_message.php', fd);
-  if (res.success) {
-    input.value = '';
-    fileInput.value = '';
-    document.getElementById('chatMessages').insertAdjacentHTML('beforeend', bubbleTemplate(res.message));
-    lastMessageId = Math.max(lastMessageId, res.message.id);
-    document.getElementById('chatMessages').scrollTop = 999999;
-    loadConversations();
+  // Pas encore de conversation existante : on affiche une zone de saisie
+  // qui créera la conversation au premier message envoyé.
+  try {
+    const reponse = await fetch(API_URL + 'profil.php?user_id=' + autreId);
+    const data = await reponse.json();
+    if (data.success) {
+      ouvrirConversation(null, data.data.prenom + ' ' + data.data.nom, data.data.avatar, autreId);
+    }
+  } catch (erreur) {
+    afficherBandeauGlobal('Impossible d\'ouvrir la conversation.', 'error');
   }
-});
+}
 
-loadConversations();
-// Rafraîchit la liste des conversations toutes les 5s (nouveaux messages entrants)
-setInterval(loadConversations, 5000);
+function ouvrirConversation(convId, nomAffiche, avatarAffiche, autreId) {
+  document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+  const item = document.querySelector(`.conv-item[data-autre-id="${autreId}"]`);
+  if (item) item.classList.add('active');
+
+  _conversationActive = { convId: convId, autreId: autreId };
+  _dernierTimestamp = '1970-01-01 00:00:00';
+
+  document.getElementById('chat-entete').innerHTML = `
+    <img src="${texteSur(avatarAffiche)}" class="avatar-sm" alt="">
+    <span></span>
+  `;
+  document.getElementById('chat-entete').querySelector('span').textContent = nomAffiche;
+
+  document.getElementById('zone-messages').innerHTML = '';
+  document.getElementById('zone-chat-active').style.display = 'flex';
+  document.getElementById('chat-vide').style.display = 'none';
+
+  if (convId) chargerMessages(true);
+
+  demarrerPolling();
+}
+
+async function chargerMessages(defilerVersBas) {
+  if (!_conversationActive || !_conversationActive.convId) return;
+  const user = utilisateurConnecte();
+
+  try {
+    const url = API_URL + 'messages.php?conversation_id=' + _conversationActive.convId
+      + '&user_id=' + user.id + '&depuis=' + encodeURIComponent(_dernierTimestamp);
+    const reponse = await fetch(url);
+    const data = await reponse.json();
+
+    if (data.success && data.data.length > 0) {
+      const zone = document.getElementById('zone-messages');
+      data.data.forEach(function (m) {
+        zone.appendChild(construireMessage(m, user.id));
+        _dernierTimestamp = m.created_at;
+      });
+      if (defilerVersBas) zone.scrollTop = zone.scrollHeight;
+    }
+  } catch (erreur) {
+    // Échec silencieux : le polling réessaiera au tour suivant
+  }
+}
+
+function construireMessage(m, monId) {
+  const div = document.createElement('div');
+  const estMoi = parseInt(m.expediteur_id, 10) === parseInt(monId, 10);
+  div.className = 'message' + (estMoi ? ' moi' : '');
+
+  const imageHtml = m.image
+    ? `<img src="${texteSur(m.image)}" class="msg-image" alt="Image envoyée">`
+    : '';
+  const contenuHtml = m.contenu ? '<span class="msg-contenu"></span>' : '';
+
+  div.innerHTML = `
+    <img src="${texteSur(m.exp_avatar)}" class="avatar-xs" alt="">
+    <div class="bulle">
+      ${imageHtml}
+      ${contenuHtml}
+      <span class="msg-heure"></span>
+    </div>
+  `;
+  if (m.contenu) div.querySelector('.msg-contenu').textContent = m.contenu;
+  div.querySelector('.msg-heure').textContent = new Date(m.created_at.replace(' ', 'T'))
+    .toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+  return div;
+}
+
+async function envoyerMessage() {
+  const input = document.getElementById('input-message');
+  const fichierInput = document.getElementById('input-image-message');
+  const contenu = input.value.trim();
+  const fichier = fichierInput.files[0];
+
+  if (!contenu && !fichier) return;
+  if (!_conversationActive) return;
+
+  const user = utilisateurConnecte();
+  input.value = '';
+
+  try {
+    let reponse;
+    if (fichier) {
+      const formData = new FormData();
+      formData.append('user_id', user.id);
+      formData.append('destinataire_id', _conversationActive.autreId);
+      formData.append('contenu', contenu);
+      formData.append('image', fichier);
+      reponse = await fetch(API_URL + 'messages.php', { method: 'POST', body: formData });
+      fichierInput.value = '';
+    } else {
+      reponse = await fetch(API_URL + 'messages.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          destinataire_id: _conversationActive.autreId,
+          contenu: contenu,
+        }),
+      });
+    }
+    const data = await reponse.json();
+
+    if (data.success) {
+      _conversationActive.convId = data.conv_id;
+      chargerMessages(true);
+      chargerConversations(); // rafraîchit la sidebar (dernier message, tri)
+    } else {
+      afficherBandeauGlobal(data.message || 'Message non envoyé.', 'error');
+    }
+  } catch (erreur) {
+    afficherBandeauGlobal('Message non envoyé (erreur réseau).', 'error');
+  }
+}
+
+function demarrerPolling() {
+  arreterPolling();
+  _intervalPolling = setInterval(function () {
+    chargerMessages(true);
+  }, 3000);
+}
+
+function arreterPolling() {
+  if (_intervalPolling) {
+    clearInterval(_intervalPolling);
+    _intervalPolling = null;
+  }
+}
+
+function initialiserChat(options) {
+  chargerConversations(options && options.autreId ? options.autreId : null);
+
+  document.getElementById('recherche-conv').addEventListener('input', function (e) {
+    const terme = e.target.value.toLowerCase();
+    document.querySelectorAll('.conv-item').forEach(function (item) {
+      const nom = item.dataset.autreNom.toLowerCase();
+      item.style.display = nom.includes(terme) ? 'flex' : 'none';
+    });
+  });
+
+  document.getElementById('liste-conversations').addEventListener('click', function (e) {
+    const item = e.target.closest('.conv-item');
+    if (item) {
+      ouvrirConversation(item.dataset.convId, item.dataset.autreNom, item.dataset.autreAvatar, item.dataset.autreId);
+    }
+  });
+
+  document.getElementById('btn-envoyer-message').addEventListener('click', envoyerMessage);
+  document.getElementById('input-message').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') envoyerMessage();
+  });
+  document.getElementById('input-image-message').addEventListener('change', function (e) {
+    const label = document.querySelector('.btn-piece-jointe');
+    if (e.target.files[0]) {
+      label.textContent = '🖼️';
+      label.title = e.target.files[0].name;
+    } else {
+      label.textContent = '📎';
+      label.title = 'Envoyer une image';
+    }
+  });
+}

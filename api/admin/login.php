@@ -1,8 +1,8 @@
 <?php
 /**
- * api/login.php — POST
- * Vérifie les identifiants et retourne les infos de l'utilisateur
- * (sans le mot de passe) pour stockage dans sessionStorage côté JS.
+ * api/admin/login.php — POST
+ * Connexion réservée au back-office : identique à login.php mais
+ * refuse explicitement les comptes de rôle 'user'.
  * Reçoit : { email, mot_de_passe }
  */
 
@@ -11,7 +11,7 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST');
 header('Access-Control-Allow-Headers: Content-Type');
 
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/../config.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -23,37 +23,29 @@ $body  = lire_json_body();
 $email = trim($body['email'] ?? '');
 $mdp   = (string)($body['mot_de_passe'] ?? '');
 
-if ($email === '' || $mdp === '') {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Email et mot de passe requis']);
-    exit;
-}
-
-$stmt = $pdo->prepare('SELECT * FROM users WHERE email = ?');
+$stmt = $pdo->prepare('SELECT * FROM users WHERE email = ? AND email_verifie = 1');
 $stmt->execute([$email]);
 $user = $stmt->fetch();
 
-// Message volontairement identique pour email inconnu ET mot de passe faux
-// (empêche l'énumération de comptes existants)
 if (!$user || !password_verify($mdp, $user['mot_de_passe'])) {
     http_response_code(401);
     echo json_encode(['success' => false, 'message' => 'Identifiants incorrects']);
     exit;
 }
 
-if ((int)$user['email_verifie'] !== 1) {
+// Vérification critique : un compte 'user' normal ne peut pas accéder au back-office
+if ($user['role'] === 'user') {
     http_response_code(403);
-    echo json_encode(['success' => false, 'message' => 'Email non confirmé. Vérifie ta boîte de réception.']);
+    echo json_encode(['success' => false, 'message' => 'Accès refusé']);
     exit;
 }
 
 if ((int)$user['is_banned'] === 1) {
     http_response_code(403);
-    echo json_encode(['success' => false, 'message' => 'Ce compte a été suspendu.']);
+    echo json_encode(['success' => false, 'message' => 'Ce compte a été suspendu']);
     exit;
 }
 
 unset($user['mot_de_passe'], $user['token_email']);
 
-http_response_code(200);
-echo json_encode(['success' => true, 'user' => $user]);
+echo json_encode(['success' => true, 'admin' => $user]);

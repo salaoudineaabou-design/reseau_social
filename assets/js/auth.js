@@ -1,83 +1,173 @@
 /**
- * auth.js - Gère inscription, connexion, mot de passe oublié / réinitialisation
- * Toutes les actions se font en AJAX, sans rechargement de page.
+ * assets/js/auth.js
+ * Gère l'inscription, la connexion, la déconnexion et la réinitialisation
+ * de mot de passe. Toutes les fonctions communiquent avec l'API via Fetch
+ * et ne provoquent jamais de rechargement de page.
  */
 
-function showMsg(el, text, type = 'error') {
-  el.textContent = text;
-  el.className = type === 'error' ? 'error-msg' : 'success-msg';
-  el.classList.remove('hidden');
-}
-
-// ---------- Formulaire d'inscription ----------
-const registerForm = document.getElementById('registerForm');
-if (registerForm) {
-  registerForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const msg = document.getElementById('msg');
-    const payload = {
-      prenom: document.getElementById('prenom').value,
-      nom: document.getElementById('nom').value,
-      email: document.getElementById('email').value,
-      password: document.getElementById('password').value,
-    };
-    const res = await apiCall('register.php', 'POST', payload);
-    showMsg(msg, res.message, res.success ? 'success' : 'error');
-    if (res.success) registerForm.reset();
-  });
-}
-
-// ---------- Formulaire de connexion ----------
-const loginForm = document.getElementById('loginForm');
-if (loginForm) {
-  loginForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const msg = document.getElementById('msg');
-    const payload = {
-      email: document.getElementById('email').value,
-      password: document.getElementById('password').value,
-    };
-    const res = await apiCall('login.php', 'POST', payload);
-    if (res.success) {
-      Session.setToken(res.session_token);
-      Session.setUser(res.user);
-      window.location.href = 'accueil.html';
-    } else {
-      showMsg(msg, res.message, 'error');
-    }
-  });
-}
-
-// ---------- Mot de passe oublié ----------
-const forgotForm = document.getElementById('forgotForm');
-if (forgotForm) {
-  forgotForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const msg = document.getElementById('msg');
-    const email = document.getElementById('email').value;
-    const res = await apiCall('forgot_password.php', 'POST', { email });
-    showMsg(msg, res.message, res.success ? 'success' : 'error');
-  });
-}
-
-// ---------- Réinitialisation du mot de passe ----------
-const resetForm = document.getElementById('resetForm');
-if (resetForm) {
+/** Initialise les écouteurs propres au fragment login.html */
+function initialiserLogin() {
   const params = new URLSearchParams(window.location.search);
-  const token = params.get('token');
-  resetForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const msg = document.getElementById('msg');
-    const password = document.getElementById('password').value;
-    const res = await apiCall('reset_password.php', 'POST', { token, password });
-    showMsg(msg, res.message, res.success ? 'success' : 'error');
-    if (res.success) setTimeout(() => (window.location.href = 'login.html'), 1500);
-  });
+  if (params.get('succes') === 'compte_active') {
+    afficherMessage('login-success', 'Compte activé ! Vous pouvez vous connecter.', 'success');
+  }
+  if (params.get('erreur') === 'token_invalide') {
+    afficherMessage('login-error', 'Lien de confirmation invalide ou déjà utilisé.', 'error');
+  }
 }
 
-// ---------- Déconnexion (utilisée depuis la navbar) ----------
-async function logout() {
-  await apiCall('logout.php', 'POST');
-  Session.clear();
-  window.location.href = 'login.html';
+async function gererConnexion() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const btnLogin = document.getElementById('btn-login');
+
+  if (!email || !password) {
+    afficherMessage('login-error', 'Remplis tous les champs.', 'error');
+    return;
+  }
+
+  btnLogin.disabled = true;
+  btnLogin.textContent = 'Connexion en cours...';
+
+  try {
+    const reponse = await fetch(API_URL + 'login.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, mot_de_passe: password }),
+    });
+    const data = await reponse.json();
+
+    if (reponse.ok && data.success) {
+      sessionStorage.setItem('user', JSON.stringify(data.user));
+      mettreAJourNavConnecte(data.user);
+      naviguer('accueil');
+    } else {
+      afficherMessage('login-error', data.message || 'Erreur inconnue', 'error');
+    }
+  } catch (erreur) {
+    afficherMessage('login-error', 'Impossible de joindre le serveur.', 'error');
+  } finally {
+    btnLogin.disabled = false;
+    btnLogin.textContent = 'Se connecter';
+  }
+}
+
+async function gererInscription() {
+  const nom = document.getElementById('register-nom').value.trim();
+  const prenom = document.getElementById('register-prenom').value.trim();
+  const email = document.getElementById('register-email').value.trim();
+  const password = document.getElementById('register-password').value;
+  const btn = document.getElementById('btn-register');
+
+  if (!nom || !prenom || !email || !password) {
+    afficherMessage('register-error', 'Remplis tous les champs.', 'error');
+    return;
+  }
+  if (password.length < 8) {
+    afficherMessage('register-error', 'Le mot de passe doit contenir au moins 8 caractères.', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Création en cours...';
+
+  try {
+    const reponse = await fetch(API_URL + 'register.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nom: nom, prenom: prenom, email: email, mot_de_passe: password }),
+    });
+    const data = await reponse.json();
+
+    if (reponse.ok && data.success) {
+      afficherMessage('register-success', data.message, 'success');
+      setTimeout(() => naviguer('login'), 1800);
+    } else {
+      afficherMessage('register-error', data.message || 'Erreur inconnue', 'error');
+    }
+  } catch (erreur) {
+    afficherMessage('register-error', 'Impossible de joindre le serveur.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "S'inscrire";
+  }
+}
+
+async function gererMotDePasseOublie() {
+  const email = document.getElementById('forgot-email').value.trim();
+  const btn = document.getElementById('btn-forgot');
+  if (!email) {
+    afficherMessage('forgot-error', 'Renseigne ton email.', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Envoi en cours...';
+
+  try {
+    const reponse = await fetch(API_URL + 'forgot_password.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email }),
+    });
+    const data = await reponse.json();
+    afficherMessage('forgot-success', data.message, 'success');
+  } catch (erreur) {
+    afficherMessage('forgot-error', 'Impossible de joindre le serveur.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Envoyer le lien';
+  }
+}
+
+async function gererReinitialisation() {
+  const token = sessionStorage.getItem('reset_token');
+  const nouveau = document.getElementById('reset-password').value;
+  const confirmation = document.getElementById('reset-password-confirm').value;
+  const btn = document.getElementById('btn-reset');
+
+  if (!token) {
+    afficherMessage('reset-error', 'Lien invalide, redemande une réinitialisation.', 'error');
+    return;
+  }
+  if (nouveau.length < 8) {
+    afficherMessage('reset-error', 'Le mot de passe doit contenir au moins 8 caractères.', 'error');
+    return;
+  }
+  if (nouveau !== confirmation) {
+    afficherMessage('reset-error', 'Les deux mots de passe ne correspondent pas.', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Modification...';
+
+  try {
+    const reponse = await fetch(API_URL + 'reset_password.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: token, nouveau_mdp: nouveau }),
+    });
+    const data = await reponse.json();
+
+    if (reponse.ok && data.success) {
+      sessionStorage.removeItem('reset_token');
+      afficherMessage('reset-success', data.message, 'success');
+      setTimeout(() => naviguer('login'), 1800);
+    } else {
+      afficherMessage('reset-error', data.message || 'Erreur inconnue', 'error');
+    }
+  } catch (erreur) {
+    afficherMessage('reset-error', 'Impossible de joindre le serveur.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Changer le mot de passe';
+  }
+}
+
+function gererDeconnexion() {
+  arreterPolling();
+  sessionStorage.removeItem('user');
+  mettreAJourNavDeconnecte();
+  naviguer('login');
 }
